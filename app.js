@@ -1,52 +1,103 @@
-const express = require('express');
-const app = express();
-const path = require('path');
-const mongoose = require('mongoose');
-const Blog = require("./models/blog");
-mongoose.connect("mongodb+srv://tanyabansal525:CMPaZNEti4oefmoj@cluster0.a9thyho.mongodb.net/").then(() => {
-    console.log('database connected');
-}).catch((err) => {
-    console.log(err.message);
-})
-app.set('view engine', 'ejs');
-app.use(express.static(path.join(__dirname, 'Public')));
-app.use(express.urlencoded({ extended: true }));
-const port = 3000;
-app.get('/', (req, res) =>{
-    res.redirect('/add-blog');
-})
-app.get("/show-blogs",async (req, res) => {
-    const allBlogs = await Blog.find({});
-    console.log(allBlogs)
-    res.render('Show_blogs',{allBlogs})
-})
-app.get('/add-blog', (req, res) => {
-    res.render("add_item");
-})
-app.post('/add-blog', async(req, res) => {
-    console.log(req.body);
-    const { fname, lname, email, title, image1,image2,image3,image4, content } = req.body;
+// app.js
+document.addEventListener('DOMContentLoaded', fetchTransactions);
 
-    const isdatastored=await Blog.create({ name: fname + " " + lname, email: email, photo: [image1,image2,image3,image4], text: content, title: title });
-    if (!isdatastored) {
-        console.log('Err');
-    }
-    console.log('Data stored Success');
-    res.redirect("/show-blogs")
-})
-app.get("/read-blog/:id",async(req, res) => {
-    const { id } = req.params;
-    const item = await Blog.findById(id);
-    console.log(item);
-    res.render('read_blogs',{item})
-})
-app.post("/delete-blog/:id",async (req, res) => {
-    const { id } = req.params;
-    const deleteitem=await Blog.findByIdAndDelete(id);
-    if (!deleteitem) {
-        console.log('Item not deleted');
-    }
-    console.log('Item deleted');
-    res.redirect("/show-blogs")
-})
-app.listen(port, () => { console.log('Server is running at port 3000') });
+function fetchTransactions() {
+  fetch('/api/transactions')
+    .then(response => response.json())
+    .then(transactions => {
+      const transactionList = document.getElementById('transaction-list');
+      transactionList.innerHTML = '';
+        let total =0;
+      transactions.forEach(transaction => {
+        const listItem = document.createElement('div');
+        listItem.classList.add('bg-light','text-dark','rounded','p-2' ,'m-2','item')
+        listItem.innerHTML = `  <span class="fs-5"> ${transaction.createdAt.slice(0,10)}</span>
+         <span class="fs-5"> ${transaction.text}</span> <span class="fs-5">${formatCurrency(transaction.amount)}</span>
+          <div>
+
+          <button onclick="editTransaction('${transaction._id}', '${transaction.text}', ${transaction.amount})" class="border rounded p-2 text-info">
+          <i class="fa-solid fa-edit"></i>
+          </button>
+          <button onclick="deleteTransaction('${transaction._id}')" class="border rounded p-2 text-danger">
+          <i class="fa-solid fa-trash"></i>
+          </button>
+          </div>
+        `;
+        transactionList.appendChild(listItem);
+        total+=transaction.amount;
+      });
+      document.getElementById('total').innerText = `Total: ${formatCurrency(total)}`;
+    })
+    .catch(error => console.error('Error fetching transactions:', error));
+}
+
+function addTransaction() {
+  const text = document.getElementById('text').value;
+  const amount = parseFloat(document.getElementById('amount').value);
+
+  if (text && !isNaN(amount)) {
+    const transaction = {
+      text,
+      amount,
+    };
+
+    fetch('/api/transactions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(transaction),
+    })
+      .then(response => response.json())
+      .then(() => {
+        fetchTransactions();
+        document.getElementById('text').value = '';
+        document.getElementById('amount').value = '';
+      })
+      .catch(error => console.error('Error adding transaction:', error));
+  } else {
+    alert('Please enter valid text and amount.');
+  }
+}
+
+function editTransaction(id, text, amount) {
+  const newText = prompt('Enter new text:', text);
+  const newAmount = parseFloat(prompt('Enter new amount:', amount));
+
+  if (newText !== null && !isNaN(newAmount)) {
+    const updatedTransaction = {
+      text: newText,
+      amount: newAmount,
+    };
+
+    fetch(`/api/transactions/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updatedTransaction),
+    })
+      .then(response => response.json())
+      .then(() => fetchTransactions())
+      .catch(error => console.error('Error editing transaction:', error));
+  }
+}
+
+function deleteTransaction(id) {
+  if (confirm('Are you sure you want to delete this transaction?')) {
+    fetch(`/api/transactions/${id}`, {
+      method: 'DELETE',
+    })
+      .then(response => response.json())
+      .then(() => fetchTransactions())
+      .catch(error => console.error('Error deleting transaction:', error));
+  }
+}
+
+function formatCurrency(amount) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}
+
